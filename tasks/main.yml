@@ -1,0 +1,133 @@
+#SPDX-License-Identifier: MIT-0
+---
+
+- name: Check if Docker is installed
+  ansible.builtin.command: "{{ 'sudo ' if sudo_docker | default(false) else '' }}docker --version"
+  register: docker_version_result
+  ignore_errors: true
+
+- name: Fail if Docker is not installed
+  ansible.builtin.fail:
+    msg: "Docker is not installed! Please install Docker first."
+  when: docker_version_result.rc != 0
+
+- name: Ensure Docker service is running
+  ansible.builtin.service:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Check if Caddy service is running
+  ansible.builtin.shell: "systemctl is-active --quiet caddy"
+  register: caddy_status
+  ignore_errors: true
+
+- name: Set a variable if Caddy is running
+  ansible.builtin.set_fact:
+    caddy_is_running: true
+  when: caddy_status.rc == 0
+
+- name: Set a variable if Caddy is not running
+  ansible.builtin.set_fact:
+    caddy_is_running: false
+  when: caddy_status.rc != 0
+
+# TODO: REMOVE THIS DEBUG TASK
+- name: Debug Caddy status
+  ansible.builtin.debug:
+    msg: "Is Caddy running? {{ caddy_is_running }}"
+
+- name: Debug url variable
+  ansible.builtin.debug:
+    msg: "URL variable is set to {{ url }}"
+
+- name: Fail if URL is not provided
+  ansible.builtin.fail:
+    msg: "The 'URL' variable is mandatory. Please set it in your playbook or pass it as an extra variable."
+  when: url == "" or url is not defined
+
+- name: Fail if service_path is not provided
+  ansible.builtin.fail:
+    msg: "The 'service_path' variable is mandatory. Please set it in your playbook or pass it as an extra variable."
+  when: service_path == "" or service_path is not defined
+
+- name: Expand `~` in remote directory path and store in new variable
+  ansible.builtin.set_fact:
+    expanded_remote_dir: "{{ remote_dir | regex_replace('^~', ansible_user_dir) }}"
+
+- name: Create remote directory if it does not exists
+  ansible.builtin.file:
+    path: "{{ expanded_remote_dir }}"
+    state: directory
+    mode: '0755'
+
+
+- name: Copy service folder to remote directory
+  ansible.builtin.copy:
+    src: "{{ service_path }}"
+    dest: "{{ expanded_remote_dir }}/"
+    owner: "{{ ansible_user }}"
+    group: "{{ ansible_user }}"
+    mode: '0755'
+
+- name: Set service path in new variable
+  ansible.builtin.set_fact:
+    remote_service_path: "{{ expanded_remote_dir }}/{{ service_path | basename }}"
+
+
+# TODO: HomePage Config (of services)
+# TODO: Config portainer and homepage
+# NOTE: Hay que darle permisos a al user de servicio de caddy par aver los ficheros en mi user
+# NOTE: Al final lo que hice es que el servicio corriera con el user 'root' en lugar del user caddy
+- name: Stop the service if running
+  ansible.builtin.command: "{{ 'sudo ' if sudo_docker | default(false) else '' }} docker compose down"
+  args:
+    chdir: "{{ remote_service_path }}"
+  ignore_errors: true
+
+- name: Debug port variable
+  ansible.builtin.debug:
+    msg: "{{ compose_variables | default({}) | combine({'APP_PORT': app_port}) }}"
+
+- name: Create .env file with compose variables without template
+  ansible.builtin.copy:
+    content: |
+      {% if expose_port %}
+      APP_PORT={{ app_port }}
+      {% else %}
+      APP_PORT=127.0.0.1:{{ app_port }}
+      {% endif %}
+      {% for key, value in compose_variables.items() %}
+      {{ key }}={{ value }}
+      {% endfor %}
+    dest: "{{ remote_service_path }}/.env"
+    mode: '644'
+
+- name: Launch the service
+  ansible.builtin.command: "{{ 'sudo ' if sudo_docker | default(false) else '' }} docker compose up -d"
+  args:
+    chdir: "{{ remote_service_path }}"
+  register: service_launch_result
+
+
+- name: Delete .env file if delete_env is set to true
+  ansible.builtin.file:
+    state: absent
+    path: "{{ remote_service_path }}/.env"
+
+  when: delete_env
+
+- name: Create Caddyfile
+  ansible.builtin.template:
+    src: caddyfile.j2
+    dest: "{{ remote_service_path }}/Caddyfile"
+    mode: '644'
+
+- name: Reload Caddy service
+  ansible.builtin.command: "sudo systemctl reload caddy"
+  when: caddy_is_running
+
+
+- name: Debug service launch result
+  ansible.builtin.debug:
+    msg: "Service launch result: {{ service_launch_result }}"
