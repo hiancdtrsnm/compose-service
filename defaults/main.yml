@@ -1,6 +1,5 @@
 #SPDX-License-Identifier: MIT-0
 ---
-# defaults file for compose-service
 app_port: ""              # Default value is None
 remote_dir: ~/services  # Default value is ~/services
 url: ""
