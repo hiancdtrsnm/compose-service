@@ -8,3 +8,4 @@ compose_variables: {}
 sudo_docker: false
 delete_env: false
 expose_port: false
+network_name: services

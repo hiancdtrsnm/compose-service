@@ -76,14 +76,10 @@
 
 - name: Create "services" network if it does not exist
   docker_network:
-    name: services
+    name: { network_name }
     driver: bridge
 
 
-# TODO: HomePage Config (of services)
-# TODO: Config portainer and homepage
-# NOTE: Hay que darle permisos a al user de servicio de caddy par aver los ficheros en mi user
-# NOTE: Al final lo que hice es que el servicio corriera con el user 'root' en lugar del user caddy
 - name: Stop the service if running
   ansible.builtin.command: "{{ 'sudo ' if sudo_docker | default(false) else '' }} docker compose down"
   args:
