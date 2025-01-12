@@ -37,7 +37,7 @@ Including an example of how to use your role (for instance, with variables passe
     - hosts: pi
       name: "Homepage"
       roles:
-        - hiancd.compose-service
+        - hiancdtrsnm.compose-service
       vars:
         url: "home.pi.home.local"
         service_path: "./services/homepage"
