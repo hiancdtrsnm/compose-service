@@ -74,6 +74,11 @@
   ansible.builtin.set_fact:
     remote_service_path: "{{ expanded_remote_dir }}/{{ service_path | basename }}"
 
+- name: Create "services" network if it does not exist
+  docker_network:
+    name: services
+    driver: bridge
+
 
 # TODO: HomePage Config (of services)
 # TODO: Config portainer and homepage
