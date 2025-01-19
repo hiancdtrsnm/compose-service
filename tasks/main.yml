@@ -55,6 +55,20 @@
   ansible.builtin.set_fact:
     expanded_remote_dir: "{{ remote_dir | regex_replace('^~', ansible_user_dir) }}"
 
+
+- name: Check if service path exists on local machine
+  ansible.builtin.stat:
+    path: "{{ service_path }}"
+  register: service_path_status
+  delegate_to: localhost
+
+
+- name: Fail if service path does not exist on local machine
+  ansible.builtin.fail:
+    msg: "The service path does not exist on the local machine: {{ service_path }}"
+  when: not service_path_status.stat.exists
+
+
 - name: Create remote directory if it does not exists
   ansible.builtin.file:
     path: "{{ expanded_remote_dir }}"
